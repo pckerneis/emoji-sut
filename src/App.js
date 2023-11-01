@@ -86,9 +86,16 @@ export default class App extends PureComponent {
   };
 
   doToggleFavorite = (symbol) => {
-    this.setState({
-      favorites: toggleFavorite(this.state.loggedUser, symbol),
-    });
+    if (this.state.loggedUser == null) {
+      this.setState({
+        loginScreenVisible: true,
+      })
+
+    } else {
+      this.setState({
+        favorites: toggleFavorite(this.state.loggedUser, symbol),
+      });
+    }
   }
 
   render() {
