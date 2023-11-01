@@ -6,6 +6,7 @@ import filterEmoji from './filterEmoji';
 import LoginScreen from './LoginScreen';
 import LoggedScreen from './LoggedScreen';
 import {getUserData, toggleFavorite} from './userData';
+import FavoritesScreen from './FavoritesScreen';
 
 export default class App extends PureComponent {
   constructor(props) {
@@ -16,7 +17,8 @@ export default class App extends PureComponent {
       totalResults: searchResult.total,
       loginScreenVisible: false,
       loggedScreenVisible: false,
-      loggedUser: 'Albert',
+      favoritesScreenVisible: false,
+      loggedUser: null,
       favorites: []
     };
   }
@@ -42,6 +44,20 @@ export default class App extends PureComponent {
   hideLoggedScreen = () => {
     this.setState({
       loggedScreenVisible: false,
+    });
+  }
+
+  showFavoritesScreen = () => {
+    this.setState({
+      favoritesScreenVisible: true,
+      loginScreenVisible: false,
+      loggedScreenVisible: false,
+    });
+  }
+
+  hideFavoritesScreen = () => {
+    this.setState({
+      favoritesScreenVisible: false,
     });
   }
 
@@ -100,6 +116,12 @@ export default class App extends PureComponent {
               <LoggedScreen
                   doLogout={this.doLogout}
                   hideLoggedScreen={this.hideLoggedScreen}
+                  showFavoritesScreen={this.showFavoritesScreen}
+              />)}
+          {this.state.favoritesScreenVisible && (
+              <FavoritesScreen
+                  favorites={this.state.favorites}
+                  hideFavoritesScreen={this.hideFavoritesScreen}
               />)}
         </div>
     );
