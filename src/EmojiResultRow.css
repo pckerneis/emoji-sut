@@ -1,0 +1,42 @@
+.component-emoji-result-row {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+  padding: 10px;
+  height: 32px;
+  position: relative;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  cursor: pointer;
+  align-items: center;
+}
+
+.component-emoji-result-row:hover {
+  background-color: #eee;
+}
+
+.component-emoji-result-row img {
+  width: 32px;
+  height: 32px;
+  padding-right: 10px;
+}
+
+.component-emoji-result-row .title {
+  position: relative;
+  margin-right: auto;
+}
+
+.component-emoji-result-row .info {
+  float: right;
+  position: relative;
+  right: 10px;
+  color: #ccc;
+  display: none;
+}
+
+.component-emoji-result-row:hover .info {
+  display: inline-block;
+}
+
+
+.component-emoji-result-row .favorite {
+  margin-right: 10px;
+}
