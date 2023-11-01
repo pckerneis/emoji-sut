@@ -3,13 +3,12 @@
   "version": "1.0.0",
   "license": "MIT",
   "devDependencies": {
+    "cypress": "^13.4.0",
     "prettier": "^1.17.1",
     "react-scripts": "^3.0.1",
-    "cypress": "^13.4.0"
+    "typescript": "^5.2.2"
   },
   "dependencies": {
-    "clipboard": "^2.0.4",
-    "github-fork-ribbon-css": "^0.2.1",
     "react": "^16.8.6",
     "react-dom": "^16.8.6"
   },
@@ -18,6 +17,8 @@
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject",
+    "e2e": "cypress open",
+    "build-lib": "tsc ./lib/mylib.ts"
   },
   "browserslist": {
     "production": [
