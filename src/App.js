@@ -3,6 +3,7 @@ import Header from "./Header";
 import SearchInput from "./SearchInput";
 import EmojiResults from "./EmojiResults";
 import filterEmoji from "./filterEmoji";
+import LoginScreen from './LoginScreen';
 
 export default class App extends PureComponent {
   constructor(props) {
@@ -10,8 +11,22 @@ export default class App extends PureComponent {
     const searchResult = filterEmoji("", 20);
     this.state = {
       filteredEmoji: searchResult.results,
-      totalResults: searchResult.total
+      totalResults: searchResult.total,
+      loginScreenVisible: false,
+      loggedUser: null,
     };
+  }
+
+  showLoginScreen = () => {
+    this.setState({
+      loginScreenVisible: true,
+    });
+  }
+
+  hideLoginScreen = () => {
+    this.setState({
+      loginScreenVisible: false,
+    });
   }
 
   handleSearchChange = event => {
@@ -25,9 +40,10 @@ export default class App extends PureComponent {
   render() {
     return (
       <div>
-        <Header />
+        <Header loggedUser={this.state.loggedUser} showLoginScreen={this.showLoginScreen} />
         <SearchInput textChange={this.handleSearchChange} />
         <EmojiResults emojiData={this.state.filteredEmoji} totalCount={this.state.totalResults} />
+        {this.state.loginScreenVisible && (<LoginScreen hideLoginScreen={this.hideLoginScreen}/>)}
       </div>
     );
   }

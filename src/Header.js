@@ -1,23 +1,23 @@
 import React, { PureComponent } from "react";
 import "./Header.css";
+import PropTypes from 'prop-types';
 
 export default class Header extends PureComponent {
+  static propTypes = {
+    loggedUser: PropTypes.string,
+    showLoginScreen: PropTypes.func,
+  };
+
   render() {
+    const logged = this.props.loggedUser != null;
     return (
       <header className="component-header">
-        <img
-          src="//cdn.jsdelivr.net/emojione/assets/png/1f638.png"
-          width="32"
-          height="32"
-          alt=""
-        />
-        Emoji Search
-        <img
-          src="//cdn.jsdelivr.net/emojione/assets/png/1f63a.png"
-          width="32"
-          height="32"
-          alt=""
-        />
+        <span className="title">Emoji Search</span>
+        <span className="login">
+          {logged
+              && (<span>Welcome, {this.props.loggedUser}!</span>)
+              || (<span onClick={this.props.showLoginScreen} className="login">Login</span>)}
+        </span>
       </header>
     );
   }

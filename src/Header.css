@@ -1,11 +1,23 @@
 .component-header {
+  display: flex;
   padding: 15px;
   position: relative;
   font-weight: normal;
   font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 32px;
-  text-align: center;
   color: #333;
+}
+
+.component-header .title {
+  font-size: 32px;
+}
+
+.component-header .login {
+  margin: auto 10px auto auto;
+  cursor: pointer;
+}
+
+.component-header .login:hover {
+  text-decoration: underline;
 }
 
 .component-header img {
