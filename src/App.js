@@ -29,6 +29,13 @@ export default class App extends PureComponent {
     });
   }
 
+  doLogin = (login) => {
+    this.setState({
+      loggedUser: login,
+      loginScreenVisible: false,
+    });
+  }
+
   handleSearchChange = event => {
     const searchResult = filterEmoji(event.target.value, 20);
     this.setState({
@@ -42,8 +49,8 @@ export default class App extends PureComponent {
       <div>
         <Header loggedUser={this.state.loggedUser} showLoginScreen={this.showLoginScreen} />
         <SearchInput textChange={this.handleSearchChange} />
-        <EmojiResults emojiData={this.state.filteredEmoji} totalCount={this.state.totalResults} />
-        {this.state.loginScreenVisible && (<LoginScreen hideLoginScreen={this.hideLoginScreen}/>)}
+        <EmojiResults emojiData={this.state.filteredEmoji} totalCount={this.state.totalResults}  loggedUser={this.state.loggedUser}/>
+        {this.state.loginScreenVisible && (<LoginScreen doLogin={this.doLogin} hideLoginScreen={this.hideLoginScreen}/>)}
       </div>
     );
   }

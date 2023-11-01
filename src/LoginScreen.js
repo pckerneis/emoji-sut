@@ -1,20 +1,27 @@
-import React, { PureComponent } from "react";
-import "./LoginScreen.css";
+import React, {useState} from 'react';
+import './LoginScreen.css';
 
-export default class LoginScreen extends PureComponent {
-  render() {
-    return (
-      <div className="login-screen" onClick={this.props.hideLoginScreen}>
-        <div className="container">
+export default function LoginScreen(props) {
+  const [login, setLogin] = useState();
+  const [password, setPassword] = useState();
+
+  const doLogin = () => {
+    if (login) {
+      props.doLogin(login);
+    }
+  };
+
+  return (
+      <div className="login-screen" onClick={props.hideLoginScreen}>
+        <div className="container" onClick={e => e.stopPropagation()}>
           <div className="login-form">
             <label>Login</label>
-            <input type="text" />
+            <input type="text" onChange={e => setLogin(e.target.value)}/>
             <label>Password</label>
-            <input type="password" />
+            <input type="password" onChange={e => setPassword(e.target.value)}/>
           </div>
-          <button>Login</button>
+          <button onClick={doLogin}>Login</button>
         </div>
       </div>
-    );
-  }
+  );
 }

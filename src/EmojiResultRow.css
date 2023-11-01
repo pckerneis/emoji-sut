@@ -36,7 +36,10 @@
   display: inline-block;
 }
 
-
 .component-emoji-result-row .favorite {
   margin-right: 10px;
+}
+
+.component-emoji-result-row .favorite.hidden {
+  visibility: hidden;
 }

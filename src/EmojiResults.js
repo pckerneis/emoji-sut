@@ -1,18 +1,21 @@
 import React, { PureComponent } from "react";
 import PropTypes from "prop-types";
-import Clipboard from "clipboard";
 
 import EmojiResultRow from "./EmojiResultRow";
 import "./EmojiResults.css";
+import {getUserData, toggleFavorite} from './userData';
 
 export default class EmojiResults extends PureComponent {
   static propTypes = {
     emojiData: PropTypes.array,
-    totalCount: PropTypes.number
+    totalCount: PropTypes.number,
+    loggedUser: PropTypes.string,
   };
 
   componentDidMount() {
-    this.clipboard = new Clipboard(".copy-to-clipboard");
+    this.state = {
+      favorites: getUserData()[this.props.loggedUser] ?? [],
+    }
   }
 
   componentWillUnmount() {
@@ -20,6 +23,13 @@ export default class EmojiResults extends PureComponent {
   }
 
   render() {
+    const favorites = getUserData()[this.props.loggedUser] ?? [];
+    const doToggleFavorite = (symbol) => {
+      this.setState({
+        favorites: toggleFavorite(this.props.loggedUser, symbol)
+      });
+    };
+
     return (
       <div className="component-emoji-results">
         <span className="count">Showing {this.props.emojiData.length} out of {this.props.totalCount} results.</span>
@@ -28,6 +38,9 @@ export default class EmojiResults extends PureComponent {
             key={emojiData.title}
             symbol={emojiData.symbol}
             title={emojiData.title}
+            favorite={favorites.includes(emojiData.symbol)}
+            loggedUser={this.props.loggedUser}
+            toggleFavorite={() => doToggleFavorite(emojiData.symbol)}
           />
         ))}
       </div>
