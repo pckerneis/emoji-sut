@@ -16,14 +16,16 @@ interface Selectable {
 }
 
 interface Parent<T> {
-  children: {[name: string]: T};
+  children: { [name: string]: T };
 }
 
 function hasChildren(object: any): object is Parent<any> {
   return object.children != null && typeof object.children === 'object';
 }
 
-type PageObjectNodeDef = Selectable & Partial<Parent<PageObjectNodeDef>> | Selector;
+type PageObjectNodeDef =
+  | (Selectable & Partial<Parent<PageObjectNodeDef>>)
+  | Selector;
 
 interface WithPath {
   path: string[];
@@ -36,7 +38,7 @@ interface Party {
 }
 
 interface SentenceContext {
-  pageObjects: {[name: string]: PageObjectNode};
+  pageObjects: { [name: string]: PageObjectNode };
   parties: Party[];
 }
 
@@ -46,9 +48,11 @@ interface PageObjectAccessors {
 
 type ExtendedSentence = Sentence & PageObjectAccessors;
 
-function resolveSelector(child: Selectable & Partial<Parent<PageObjectNode>>,
-                         sentence: Sentence | ExtendedSentence,
-                         path: string[]): Sentence | ExtendedSentence | Function {
+function resolveSelector(
+  child: Selectable & Partial<Parent<PageObjectNode>>,
+  sentence: Sentence | ExtendedSentence,
+  path: string[],
+): Sentence | ExtendedSentence | Function {
   if (typeof child.selector === 'function') {
     return (...args) => {
       sentence.selectorArgs.set(path.join(), args);
@@ -66,7 +70,12 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
       if (sentence.currentObject != null) {
         // Resolve from current object's children
         if (hasChildren(sentence.currentObject)) {
-          if (Object.prototype.hasOwnProperty.call(sentence.currentObject.children, name)) {
+          if (
+            Object.prototype.hasOwnProperty.call(
+              sentence.currentObject.children,
+              name,
+            )
+          ) {
             const child = sentence.currentObject.children[name];
             const path = [...sentence.currentObjectPath, name];
             sentence.currentObjectPath = path;
@@ -90,7 +99,12 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
       }
 
       // Resolve from root
-      if (Object.prototype.hasOwnProperty.call(sentence.sentenceContext.pageObjects, name)) {
+      if (
+        Object.prototype.hasOwnProperty.call(
+          sentence.sentenceContext.pageObjects,
+          name,
+        )
+      ) {
         const rootObject = sentence.sentenceContext.pageObjects[name];
         const path = [name];
         sentence.currentObjectPath = path;
@@ -102,7 +116,10 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
   });
 }
 
-function transformToPageObjectNodeTree(treeDef: PageObjectNodeDef, path: string[]): PageObjectNode {
+function transformToPageObjectNodeTree(
+  treeDef: PageObjectNodeDef,
+  path: string[],
+): PageObjectNode {
   if (typeof treeDef === 'string') {
     return {
       selector: treeDef,
@@ -112,15 +129,20 @@ function transformToPageObjectNodeTree(treeDef: PageObjectNodeDef, path: string[
     return {
       selector: treeDef,
       path,
-    }
+    };
   } else {
     return {
       ...treeDef,
       path,
-      children: treeDef.children ? Object.keys(treeDef.children).reduce((acc, name) => {
-        acc[name] = transformToPageObjectNodeTree(treeDef.children[name], [...path, name]);
-        return acc;
-      }, {}) : {},
+      children: treeDef.children
+        ? Object.keys(treeDef.children).reduce((acc, name) => {
+            acc[name] = transformToPageObjectNodeTree(treeDef.children[name], [
+              ...path,
+              name,
+            ]);
+            return acc;
+          }, {})
+        : {},
     };
   }
 }
@@ -144,16 +166,22 @@ export default class Sentence {
     return currentObject;
   }
 
-  constructor(public readonly sentenceContext: SentenceContext,
-              public readonly adapter: Adapter) {
-    sentenceContext.pageObjects = Object.keys(sentenceContext.pageObjects).reduce((acc, name) => {
+  constructor(
+    public readonly sentenceContext: SentenceContext,
+    public readonly adapter: Adapter,
+  ) {
+    sentenceContext.pageObjects = Object.keys(
+      sentenceContext.pageObjects,
+    ).reduce((acc, name) => {
       const nodeDef: PageObjectNodeDef = sentenceContext.pageObjects[name];
       acc[name] = transformToPageObjectNodeTree(nodeDef, [name]);
       return acc;
     }, {});
   }
-  public static given(sentenceContext: SentenceContext,
-                      adapter: Adapter): ExtendedSentence {
+  public static given(
+    sentenceContext: SentenceContext,
+    adapter: Adapter,
+  ): ExtendedSentence {
     const sentence = new Sentence(sentenceContext, adapter);
     return proxify(sentence);
   }
@@ -176,7 +204,7 @@ export default class Sentence {
     // TODO
     // this.currentTarget = this.currentParty;
     return proxify(this);
-  }
+  };
 
   private findParty(name: string): Party {
     return this.sentenceContext.parties[name];
@@ -216,9 +244,7 @@ export default class Sentence {
   }
 
   should(...args): ExtendedSentence {
-    this.adapter
-        .select(this.flattenSelectors())
-        .should(...args);
+    this.adapter.select(this.flattenSelectors()).should(...args);
     return proxify(this);
   }
 
@@ -227,16 +253,12 @@ export default class Sentence {
   }
 
   typeText(text: string): ExtendedSentence {
-    this.adapter
-        .select(this.flattenSelectors())
-        .type(text);
+    this.adapter.select(this.flattenSelectors()).type(text);
     return proxify(this);
   }
 
   click(): ExtendedSentence {
-    this.adapter
-        .select(this.flattenSelectors())
-        .click();
+    this.adapter.select(this.flattenSelectors()).click();
     return proxify(this);
   }
 

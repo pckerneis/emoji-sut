@@ -16,10 +16,10 @@ export function toggleFavorite(user, emoji) {
     item[user] = [];
   }
 
-  if (! item[user].includes(emoji)) {
+  if (!item[user].includes(emoji)) {
     item[user].push(emoji);
   } else {
-    item[user] = item[user].filter(e => e !== emoji);
+    item[user] = item[user].filter((e) => e !== emoji);
   }
 
   localStorage.setItem(userDataKey, JSON.stringify(item));

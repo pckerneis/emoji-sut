@@ -1,14 +1,14 @@
-import React, { PureComponent } from "react";
-import PropTypes from "prop-types";
+import React, { PureComponent } from 'react';
+import PropTypes from 'prop-types';
 
-import "./SearchInput.css";
+import './SearchInput.css';
 
 export default class SearchInput extends PureComponent {
   static propTypes = {
-    textChange: PropTypes.func
+    textChange: PropTypes.func,
   };
 
-  handleChange = event => {
+  handleChange = (event) => {
     this.props.textChange(event);
   };
 

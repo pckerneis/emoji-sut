@@ -1,11 +1,11 @@
-import React, {PureComponent} from 'react';
+import React, { PureComponent } from 'react';
 import Header from './Header';
 import SearchInput from './SearchInput';
 import EmojiResults from './EmojiResults';
 import filterEmoji from './filterEmoji';
 import LoginScreen from './LoginScreen';
 import LoggedScreen from './LoggedScreen';
-import {getUserData, toggleFavorite} from './userData';
+import { getUserData, toggleFavorite } from './userData';
 import FavoritesScreen from './FavoritesScreen';
 
 export default class App extends PureComponent {
@@ -19,7 +19,7 @@ export default class App extends PureComponent {
       loggedScreenVisible: false,
       favoritesScreenVisible: false,
       loggedUser: null,
-      favorites: []
+      favorites: [],
     };
   }
 
@@ -27,25 +27,25 @@ export default class App extends PureComponent {
     this.setState({
       loginScreenVisible: true,
     });
-  }
+  };
 
   hideLoginScreen = () => {
     this.setState({
       loginScreenVisible: false,
     });
-  }
+  };
 
   showLoggedScreen = () => {
     this.setState({
       loggedScreenVisible: true,
     });
-  }
+  };
 
   hideLoggedScreen = () => {
     this.setState({
       loggedScreenVisible: false,
     });
-  }
+  };
 
   showFavoritesScreen = () => {
     this.setState({
@@ -53,21 +53,21 @@ export default class App extends PureComponent {
       loginScreenVisible: false,
       loggedScreenVisible: false,
     });
-  }
+  };
 
   hideFavoritesScreen = () => {
     this.setState({
       favoritesScreenVisible: false,
     });
-  }
+  };
 
   doLogin = (login) => {
     this.setState({
       loggedUser: login,
       loginScreenVisible: false,
-      favorites: getUserData()[login] ?? []
+      favorites: getUserData()[login] ?? [],
     });
-  }
+  };
 
   doLogout = () => {
     this.setState({
@@ -75,9 +75,9 @@ export default class App extends PureComponent {
       loggedScreenVisible: false,
       favorites: [],
     });
-  }
+  };
 
-  handleSearchChange = event => {
+  handleSearchChange = (event) => {
     const searchResult = filterEmoji(event.target.value, 20);
     this.setState({
       filteredEmoji: searchResult.results,
@@ -89,48 +89,50 @@ export default class App extends PureComponent {
     if (this.state.loggedUser == null) {
       this.setState({
         loginScreenVisible: true,
-      })
-
+      });
     } else {
       this.setState({
         favorites: toggleFavorite(this.state.loggedUser, symbol),
       });
     }
-  }
+  };
 
   render() {
     return (
-        <div>
-          <Header
-              loggedUser={this.state.loggedUser}
-              showLoginScreen={this.showLoginScreen}
-              showLoggedScreen={this.showLoggedScreen}
+      <div>
+        <Header
+          loggedUser={this.state.loggedUser}
+          showLoginScreen={this.showLoginScreen}
+          showLoggedScreen={this.showLoggedScreen}
+        />
+        <SearchInput textChange={this.handleSearchChange} />
+        <EmojiResults
+          emojiData={this.state.filteredEmoji}
+          totalCount={this.state.totalResults}
+          loggedUser={this.state.loggedUser}
+          favorites={this.state.favorites}
+          doToggleFavorite={this.doToggleFavorite}
+        />
+        {this.state.loginScreenVisible && (
+          <LoginScreen
+            doLogin={this.doLogin}
+            hideLoginScreen={this.hideLoginScreen}
           />
-          <SearchInput textChange={this.handleSearchChange}/>
-          <EmojiResults
-              emojiData={this.state.filteredEmoji}
-              totalCount={this.state.totalResults}
-              loggedUser={this.state.loggedUser}
-              favorites={this.state.favorites}
-              doToggleFavorite={this.doToggleFavorite}
+        )}
+        {this.state.loggedScreenVisible && (
+          <LoggedScreen
+            doLogout={this.doLogout}
+            hideLoggedScreen={this.hideLoggedScreen}
+            showFavoritesScreen={this.showFavoritesScreen}
           />
-          {this.state.loginScreenVisible && (
-              <LoginScreen
-                  doLogin={this.doLogin}
-                  hideLoginScreen={this.hideLoginScreen}
-              />)}
-          {this.state.loggedScreenVisible && (
-              <LoggedScreen
-                  doLogout={this.doLogout}
-                  hideLoggedScreen={this.hideLoggedScreen}
-                  showFavoritesScreen={this.showFavoritesScreen}
-              />)}
-          {this.state.favoritesScreenVisible && (
-              <FavoritesScreen
-                  favorites={this.state.favorites}
-                  hideFavoritesScreen={this.hideFavoritesScreen}
-              />)}
-        </div>
+        )}
+        {this.state.favoritesScreenVisible && (
+          <FavoritesScreen
+            favorites={this.state.favorites}
+            hideFavoritesScreen={this.hideFavoritesScreen}
+          />
+        )}
+      </div>
     );
   }
 }
