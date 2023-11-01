@@ -24,6 +24,7 @@ function hasChildren(object: any): object is Parent {
 }
 
 type PageObject = Selectable & Partial<Parent>;
+// TODO : type PageObject = (Selectable & Partial<Parent>) | Selector;
 
 interface Party {
   select: () => void;
@@ -40,57 +41,48 @@ interface PageObjectAccessors {
 
 type ExtendedSentence = Sentence & PageObjectAccessors;
 
-function proxify(sentence: Sentence) {
+function resolveSelector(child: Selectable & Partial<Parent>, sentence: Sentence | ExtendedSentence): Sentence | ExtendedSentence | Function {
+  if (typeof child.selector === 'function') {
+    return (...args) => {
+      sentence.selectorArgs.set(child, args);
+      sentence.currentObject = child;
+      return proxify(sentence);
+    };
+  } else {
+    sentence.currentObject = child;
+    return proxify(sentence);
+  }
+}
+
+// Returning `any` here because TS doen't want me to be more specific
+function proxify(sentence: ExtendedSentence | Sentence): any {
   return new Proxy(sentence, {
-    get: (target: Sentence, name: string) => {
+    get: (target, name: string) => {
       if (sentence.currentObject != null) {
         // Resolve from current object's children
         if (hasChildren(sentence.currentObject)) {
           if (Object.prototype.hasOwnProperty.call(sentence.currentObject.children, name)) {
             const child = sentence.currentObject.children[name];
-
-            if (typeof child.selector === 'function') {
-              return (...args) => {
-                sentence.selectorArgs.set(child, args);
-                sentence.currentObject = child;
-                return proxify(sentence);
-              };
-            } else {
-              sentence.currentObject = child;
-              return proxify(sentence);
-            }
+            return resolveSelector(child, sentence);
           }
         }
 
         // Resolve from current object's siblings
-        console.log('current', sentence.currentObject);
         const hierarchy = sentence.hierarchyByObject.get(sentence.currentObject);
-        console.log('hierarchy', hierarchy)
         const parent = hierarchy[hierarchy.length - 2];
-        console.log('parent', parent);
 
         if (parent && hasChildren(parent)) {
           if (Object.prototype.hasOwnProperty.call(parent.children, name)) {
-            const child = parent.children[name];
-
-            if (typeof child.selector === 'function') {
-              return (...args) => {
-                sentence.selectorArgs.set(child, args);
-                sentence.currentObject = child;
-                return proxify(sentence);
-              };
-            } else {
-              sentence.currentObject = child;
-              return proxify(sentence);
-            }
+            const sibling = parent.children[name];
+            return resolveSelector(sibling, sentence);
           }
         }
       }
 
       // Resolve from root
       if (Object.prototype.hasOwnProperty.call(sentence.sentenceContext.pageObjects, name)) {
-        sentence.currentObject = sentence.sentenceContext.pageObjects[name];
-        return proxify(sentence);
+        const rootObject = sentence.sentenceContext.pageObjects[name];
+        return resolveSelector(rootObject, sentence);
       }
 
       return target[name];
