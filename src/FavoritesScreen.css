@@ -27,10 +27,16 @@
 }
 
 .favorites-screen .favorites {
+    margin-top: 10px;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+    grid-gap: 10px;
     justify-content: center;
     justify-items: center;
     align-items: center;
     align-content: center;
+}
+
+.favorites-screen .count {
+    margin: 10px;
 }

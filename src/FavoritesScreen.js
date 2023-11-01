@@ -10,7 +10,12 @@ export default function FavoritesScreen(props) {
       <div className="favorites-screen" onClick={props.hideFavoritesScreen}>
         <div className="container" onClick={e => e.stopPropagation()}>
           <div className="title">Your favorites</div>
-          {props.favorites.length === 0 && <div className="empty">You don't have any favorite emoji yet.</div>}
+          <div className="count">
+            {props.favorites.length === 0
+                ? <span>You don't have any favorite emoji yet.</span>
+                : <span>You have {props.favorites.length} favorite Emojis.</span>}
+
+          </div>
           <div className="favorites">
             {props.favorites.map(favorite => (
                 <div key={favorite} className="favorite">
