@@ -15,23 +15,32 @@ interface Selectable {
   selector: Selector;
 }
 
-interface Parent {
-  children: {[name: string]: PageObject};
+interface Parent<T> {
+  children: {[name: string]: T};
 }
 
-function hasChildren(object: any): object is Parent {
+function hasChildren(object: any): object is Parent<any> {
   return object.children != null && typeof object.children === 'object';
 }
 
-type PageObject = Selectable & Partial<Parent>;
+type PageObjectNodeDef = Selectable & Partial<Parent<PageObjectNodeDef>> | Selector;
 // TODO : type PageObject = (Selectable & Partial<Parent>) | Selector;
+//   which breaks the hierarchyByObject map as we could have duplicate keys
+//   Better would be to accept Selectors but then map it to an object with
+//   a selector property and a path property
+
+interface WithPath {
+  path: string[];
+}
+
+type PageObjectNode = Selectable & Partial<Parent<PageObjectNode>> & WithPath;
 
 interface Party {
   select: () => void;
 }
 
 interface SentenceContext {
-  pageObjects: {[name: string]: PageObject};
+  pageObjects: {[name: string]: PageObjectNode};
   parties: Party[];
 }
 
@@ -41,15 +50,15 @@ interface PageObjectAccessors {
 
 type ExtendedSentence = Sentence & PageObjectAccessors;
 
-function resolveSelector(child: Selectable & Partial<Parent>, sentence: Sentence | ExtendedSentence): Sentence | ExtendedSentence | Function {
+function resolveSelector(child: Selectable & Partial<Parent<PageObjectNode>>,
+                         sentence: Sentence | ExtendedSentence,
+                         path: string[]): Sentence | ExtendedSentence | Function {
   if (typeof child.selector === 'function') {
     return (...args) => {
-      sentence.selectorArgs.set(child, args);
-      sentence.currentObject = child;
+      sentence.selectorArgs.set(path.join(), args);
       return proxify(sentence);
     };
   } else {
-    sentence.currentObject = child;
     return proxify(sentence);
   }
 }
@@ -63,18 +72,26 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
         if (hasChildren(sentence.currentObject)) {
           if (Object.prototype.hasOwnProperty.call(sentence.currentObject.children, name)) {
             const child = sentence.currentObject.children[name];
-            return resolveSelector(child, sentence);
+            const path = [...sentence.currentObjectPath, name];
+            sentence.currentObjectPath = path;
+            return resolveSelector(child, sentence, path);
           }
         }
 
         // Resolve from current object's siblings
-        const hierarchy = sentence.hierarchyByObject.get(sentence.currentObject);
-        const parent = hierarchy[hierarchy.length - 2];
+        console.log('\nResolve from current object\'s siblings', sentence.currentObjectPath, name)
+        const hierarchy = [...sentence.currentObjectPath];
+        hierarchy.pop();
+        const parent = sentence.resolveNode(hierarchy);
+        console.log('hierarchy', hierarchy)
+        console.log('parent', parent)
 
         if (parent && hasChildren(parent)) {
           if (Object.prototype.hasOwnProperty.call(parent.children, name)) {
+            const path = [...hierarchy, name];
+            sentence.currentObjectPath = path;
             const sibling = parent.children[name];
-            return resolveSelector(sibling, sentence);
+            return resolveSelector(sibling, sentence, path);
           }
         }
       }
@@ -82,7 +99,9 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
       // Resolve from root
       if (Object.prototype.hasOwnProperty.call(sentence.sentenceContext.pageObjects, name)) {
         const rootObject = sentence.sentenceContext.pageObjects[name];
-        return resolveSelector(rootObject, sentence);
+        const path = [name];
+        sentence.currentObjectPath = path;
+        return resolveSelector(rootObject, sentence, path);
       }
 
       return target[name];
@@ -90,35 +109,56 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
   });
 }
 
+function transformToPageObjectNodeTree(treeDef: PageObjectNodeDef, path: string[]): PageObjectNode {
+  if (typeof treeDef === 'string') {
+    return {
+      selector: treeDef,
+      path,
+    };
+  } else if (typeof treeDef === 'function') {
+    return {
+      selector: treeDef,
+      path,
+    }
+  } else {
+    return {
+      ...treeDef,
+      path,
+      children: treeDef.children ? Object.keys(treeDef.children).reduce((acc, name) => {
+        acc[name] = transformToPageObjectNodeTree(treeDef.children[name], [...path, name]);
+        return acc;
+      }, {}) : {},
+    };
+  }
+}
+
 export default class Sentence {
   currentParty: Party;
-  currentObject: PageObject;
-  hierarchyByObject: Map<PageObject, PageObject[]> = new Map();
-  selectorArgs: Map<PageObject, any[]> = new Map();
+  currentObjectPath: string[] = [];
+  selectorArgs: Map<string, any[]> = new Map();
+
+  get currentObject(): PageObjectNode {
+    let currentObject = null;
+
+    for (const name of this.currentObjectPath) {
+      if (currentObject == null) {
+        currentObject = this.sentenceContext.pageObjects[name];
+      } else {
+        currentObject = currentObject.children[name];
+      }
+    }
+
+    return currentObject;
+  }
 
   constructor(public readonly sentenceContext: SentenceContext,
               public readonly adapter: Adapter) {
-    Object.keys(sentenceContext.pageObjects).forEach((name) => {
-      const pageObject = sentenceContext.pageObjects[name];
-      this.hierarchyByObject.set(pageObject, [pageObject]);
-
-      if (hasChildren(pageObject)) {
-        this.visitChildren(pageObject, [pageObject]);
-      }
-    });
+    sentenceContext.pageObjects = Object.keys(sentenceContext.pageObjects).reduce((acc, name) => {
+      const nodeDef: PageObjectNodeDef = sentenceContext.pageObjects[name];
+      acc[name] = transformToPageObjectNodeTree(nodeDef, [name]);
+      return acc;
+    }, {});
   }
-
-  private visitChildren(parent: Parent, path: PageObject[]) {
-    Object.keys(parent.children).forEach((name) => {
-      const child = parent.children[name];
-      this.hierarchyByObject.set(child, [...path, child]);
-
-      if (hasChildren(child)) {
-        this.visitChildren(child, [...path, child]);
-      }
-    });
-  }
-
   public static given(sentenceContext: SentenceContext,
                       adapter: Adapter): ExtendedSentence {
     const sentence = new Sentence(sentenceContext, adapter);
@@ -184,7 +224,7 @@ export default class Sentence {
 
   should(...args): ExtendedSentence {
     this.adapter
-        .select(this.buildPath())
+        .select(this.flattenSelectors())
         .should(...args);
     return proxify(this);
   }
@@ -195,25 +235,65 @@ export default class Sentence {
 
   typeText(text: string): ExtendedSentence {
     this.adapter
-        .select(this.buildPath())
+        .select(this.flattenSelectors())
         .type(text);
     return proxify(this);
   }
 
   click(): ExtendedSentence {
     this.adapter
-        .select(this.buildPath())
+        .select(this.flattenSelectors())
         .click();
     return proxify(this);
   }
 
-  private buildPath(): string[] {
-    return this.hierarchyByObject.get(this.currentObject).map((object) => {
-      if (typeof object.selector === 'function') {
-        return object.selector(...this.selectorArgs.get(object));
+  resolveNode(path: string[]): PageObjectNode {
+    let node = null;
+
+    for (const name of path) {
+      if (node == null) {
+        node = this.sentenceContext.pageObjects[name];
       } else {
-        return object.selector;
+        node = node.children[name];
       }
-    });
+    }
+
+    return node;
+  }
+
+  private flattenSelectors(): string[] {
+    const selectors: string[] = [];
+    const path = [];
+
+    let node = null;
+
+    console.log('\nflattenSelectors', this.currentObjectPath);
+
+    for (const name of this.currentObjectPath) {
+      path.push(name);
+
+      console.log('path', path)
+
+      if (node == null) {
+        node = this.sentenceContext.pageObjects[name];
+
+        console.log('node', node)
+        selectors.push(this.flattenSelector(node.selector, path));
+      } else {
+        node = node.children[name];
+        console.log('node', node)
+        selectors.push(this.flattenSelector(node.selector, path));
+      }
+    }
+
+    return selectors;
+  }
+
+  private flattenSelector(selector: Selector, path: string[]): string {
+    if (typeof selector === 'function') {
+      return selector(...this.selectorArgs.get(path.join()));
+    } else {
+      return selector;
+    }
   }
 }
