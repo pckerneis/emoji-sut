@@ -12,8 +12,8 @@ describe('Login/Logout', () => {
         .then.loginScreen.isVisible
         .when.loginInput.typeText('admin') // TODO: use party
         .and.passwordInput.typeText('password') // TODO: use party
-        // .and.confirmButton.click()
-        // .then.loginScreen.doesNotExist
-        // .and.header.welcomeMessage.hasText('Welcome, admin!')
+        .and.confirmButton.click()
+        .then.loginScreen.doesNotExist
+        .and.header.welcomeMessage.hasText('Welcome, admin!')
   })
 })

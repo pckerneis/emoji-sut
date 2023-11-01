@@ -24,10 +24,6 @@ function hasChildren(object: any): object is Parent<any> {
 }
 
 type PageObjectNodeDef = Selectable & Partial<Parent<PageObjectNodeDef>> | Selector;
-// TODO : type PageObject = (Selectable & Partial<Parent>) | Selector;
-//   which breaks the hierarchyByObject map as we could have duplicate keys
-//   Better would be to accept Selectors but then map it to an object with
-//   a selector property and a path property
 
 interface WithPath {
   path: string[];
@@ -79,12 +75,9 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
         }
 
         // Resolve from current object's siblings
-        console.log('\nResolve from current object\'s siblings', sentence.currentObjectPath, name)
         const hierarchy = [...sentence.currentObjectPath];
         hierarchy.pop();
         const parent = sentence.resolveNode(hierarchy);
-        console.log('hierarchy', hierarchy)
-        console.log('parent', parent)
 
         if (parent && hasChildren(parent)) {
           if (Object.prototype.hasOwnProperty.call(parent.children, name)) {
@@ -267,21 +260,14 @@ export default class Sentence {
 
     let node = null;
 
-    console.log('\nflattenSelectors', this.currentObjectPath);
-
     for (const name of this.currentObjectPath) {
       path.push(name);
 
-      console.log('path', path)
-
       if (node == null) {
         node = this.sentenceContext.pageObjects[name];
-
-        console.log('node', node)
         selectors.push(this.flattenSelector(node.selector, path));
       } else {
         node = node.children[name];
-        console.log('node', node)
         selectors.push(this.flattenSelector(node.selector, path));
       }
     }
