@@ -15,7 +15,7 @@ export default class Header extends PureComponent {
         <span className="title">Emoji Search</span>
         <span className="login">
           {logged
-              && (<span>Welcome, {this.props.loggedUser}!</span>)
+              && (<span onClick={this.props.showLoggedScreen}>Welcome, {this.props.loggedUser}!</span>)
               || (<span onClick={this.props.showLoginScreen} className="login">Login</span>)}
         </span>
       </header>
