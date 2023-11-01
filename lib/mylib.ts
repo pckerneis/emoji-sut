@@ -6,6 +6,7 @@ interface Adapter {
 interface TestElement {
   should: (...args) => void;
   type: (text: string) => void;
+  click(): void;
 }
 
 type Selector = string | ((...args) => string);
@@ -19,7 +20,7 @@ interface Parent {
 }
 
 function hasChildren(object: any): object is Parent {
-  return object.children != null;
+  return object.children != null && typeof object.children === 'object';
 }
 
 type PageObject = Selectable & Partial<Parent>;
@@ -42,8 +43,9 @@ type ExtendedSentence = Sentence & PageObjectAccessors;
 function proxify(sentence: Sentence) {
   return new Proxy(sentence, {
     get: (target: Sentence, name: string) => {
-      if (sentence.currentObject != null && hasChildren(sentence.currentObject)) {
-        if (sentence.currentObject.children != null) {
+      if (sentence.currentObject != null) {
+        // Resolve from current object's children
+        if (hasChildren(sentence.currentObject)) {
           if (Object.prototype.hasOwnProperty.call(sentence.currentObject.children, name)) {
             const child = sentence.currentObject.children[name];
 
@@ -54,13 +56,38 @@ function proxify(sentence: Sentence) {
                 return proxify(sentence);
               };
             } else {
-              sentence.currentObject = sentence.currentObject.children[name];
+              sentence.currentObject = child;
+              return proxify(sentence);
+            }
+          }
+        }
+
+        // Resolve from current object's siblings
+        console.log('current', sentence.currentObject);
+        const hierarchy = sentence.hierarchyByObject.get(sentence.currentObject);
+        console.log('hierarchy', hierarchy)
+        const parent = hierarchy[hierarchy.length - 2];
+        console.log('parent', parent);
+
+        if (parent && hasChildren(parent)) {
+          if (Object.prototype.hasOwnProperty.call(parent.children, name)) {
+            const child = parent.children[name];
+
+            if (typeof child.selector === 'function') {
+              return (...args) => {
+                sentence.selectorArgs.set(child, args);
+                sentence.currentObject = child;
+                return proxify(sentence);
+              };
+            } else {
+              sentence.currentObject = child;
               return proxify(sentence);
             }
           }
         }
       }
 
+      // Resolve from root
       if (Object.prototype.hasOwnProperty.call(sentence.sentenceContext.pageObjects, name)) {
         sentence.currentObject = sentence.sentenceContext.pageObjects[name];
         return proxify(sentence);
@@ -152,10 +179,15 @@ export default class Sentence {
   }
 
   get isVisible(): ExtendedSentence {
-    this.adapter
-        .select(this.buildPath())
-        .should('be.visible');
-    return proxify(this);
+    return this.should('be.visible');
+  }
+
+  get isNotVisible(): ExtendedSentence {
+    return this.should('not.be.visible');
+  }
+
+  get doesNotExist(): ExtendedSentence {
+    return this.should('not.exist');
   }
 
   should(...args): ExtendedSentence {
@@ -166,16 +198,20 @@ export default class Sentence {
   }
 
   hasText(expectedText: string): ExtendedSentence {
-    this.adapter
-        .select(this.buildPath())
-        .should('have.text', expectedText);
-    return proxify(this);
+    return this.should('have.text', expectedText);
   }
 
   typeText(text: string): ExtendedSentence {
     this.adapter
         .select(this.buildPath())
         .type(text);
+    return proxify(this);
+  }
+
+  click(): ExtendedSentence {
+    this.adapter
+        .select(this.buildPath())
+        .click();
     return proxify(this);
   }
 
