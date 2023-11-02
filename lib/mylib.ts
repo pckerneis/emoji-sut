@@ -58,6 +58,71 @@ interface SentenceContextDef {
   parties: { [name: string]: Party };
 }
 
+function validateContextDefinition(sentenceContext: any): void {
+  if (sentenceContext.pageObjects == null) {
+    throw new Error('Missing pageObjects');
+  }
+
+  Object.keys(sentenceContext.pageObjects).forEach((name) => {
+    validateNodeDefinition(name, sentenceContext.pageObjects[name]);
+  });
+
+  if (sentenceContext.parties == null) {
+    throw new Error('Missing parties');
+  }
+}
+
+// TODO: report path in error messages
+function validateNodeDefinition(
+  name: string,
+  nodeDef: PageObjectNodeDef,
+): void {
+  validateNodeName(name);
+
+  if (typeof nodeDef === 'string') {
+    return;
+  }
+
+  if (typeof nodeDef === 'function') {
+    return;
+  }
+
+  if (nodeDef.selector == null) {
+    throw new Error('Missing selector');
+  }
+
+  if (nodeDef.children != null) {
+    Object.keys(nodeDef.children).forEach((name) => {
+      validateNodeDefinition(name, nodeDef.children[name]);
+    });
+  }
+}
+
+function validateNodeName(name: string): void {
+  if (name.includes(' ')) {
+    throw new Error(`Node name "${name}" contains spaces`);
+  }
+
+  // We technically could allow any valid JS identifier, but the check
+  // is quite complex
+  if (!name.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/)) {
+    throw new Error(`Node name "${name}" contains invalid characters`);
+  }
+
+  // We could also check for JS reserved words here, but the error would be
+  // quickly detected by the user anyway
+
+  if (isReservedWord(name)) {
+    throw new Error(`Node name "${name}" is a reserved word`);
+  }
+}
+
+function isReservedWord(name: string): boolean {
+  // Dirty and inefficient check, but it's good enough for now and doesn't
+  // risk to be out of sync
+  return name in new Sentence({ parties: {}, pageObjects: {} }, null);
+}
+
 interface PageObjectAccessors {
   [name: string]: ExtendedSentence;
 }
@@ -131,7 +196,11 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
         return target[name];
       }
 
-      throw new Error(`Could not resolve "${name}". Current object path is "${sentence.currentObjectPath.join(' > ')}".`);
+      throw new Error(
+        `Could not resolve "${name}". Current object path is "${sentence.currentObjectPath.join(
+          ' > ',
+        )}".`,
+      );
     },
   });
 }
@@ -251,6 +320,7 @@ export default class Sentence {
     sentenceContext: SentenceContextDef,
     adapter: Adapter,
   ): ExtendedSentence {
+    validateContextDefinition(sentenceContext);
     const sentence = new Sentence(sentenceContext, adapter);
     return proxify(sentence);
   }
