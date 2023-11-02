@@ -34,11 +34,16 @@ interface WithPath {
 type PageObjectNode = Selectable & Partial<Parent<PageObjectNode>> & WithPath;
 
 interface Party {
-  select: () => void;
+  [name: string]: any;
 }
 
 interface SentenceContext {
   pageObjects: { [name: string]: PageObjectNode };
+  parties: Party[];
+}
+
+interface SentenceContextDef {
+  pageObjects: { [name: string]: PageObjectNodeDef };
   parties: Party[];
 }
 
@@ -63,7 +68,7 @@ function resolveSelector(
   }
 }
 
-// Returning `any` here because TS doen't want me to be more specific
+// Returning `any` here because TS doesn't want me to be more specific
 function proxify(sentence: ExtendedSentence | Sentence): any {
   return new Proxy(sentence, {
     get: (target, name: string) => {
@@ -111,7 +116,11 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
         return resolveSelector(rootObject, sentence, path);
       }
 
-      return target[name];
+      if (name in target) {
+        return target[name];
+      }
+
+      throw new Error(`Could not resolve "${name}". Current object path is "${sentence.currentObjectPath.join(' > ')}".`);
     },
   });
 }
@@ -184,6 +193,7 @@ interface TypeAction extends BaseAction {
 type Action = TypeAction | ClickAction;
 
 export default class Sentence {
+  readonly sentenceContext: SentenceContext;
   currentParty: Party;
   currentObjectPath: string[] = [];
   selectorArgs: Map<string, any[]> = new Map();
@@ -205,16 +215,20 @@ export default class Sentence {
   }
 
   constructor(
-    public readonly sentenceContext: SentenceContext,
+    sentenceContext: SentenceContextDef,
     public readonly adapter: Adapter,
   ) {
-    sentenceContext.pageObjects = Object.keys(
-      sentenceContext.pageObjects,
-    ).reduce((acc, name) => {
-      const nodeDef: PageObjectNodeDef = sentenceContext.pageObjects[name];
-      acc[name] = transformToPageObjectNodeTree(nodeDef, [name]);
-      return acc;
-    }, {});
+    this.sentenceContext = {
+      parties: { ...sentenceContext.parties },
+      pageObjects: Object.keys(sentenceContext.pageObjects).reduce(
+        (acc, name) => {
+          const nodeDef: PageObjectNodeDef = sentenceContext.pageObjects[name];
+          acc[name] = transformToPageObjectNodeTree(nodeDef, [name]);
+          return acc;
+        },
+        {},
+      ),
+    };
   }
 
   /**
@@ -223,7 +237,7 @@ export default class Sentence {
    * @param adapter - The adapter to use for interacting with the application
    */
   public static given(
-    sentenceContext: SentenceContext,
+    sentenceContext: SentenceContextDef,
     adapter: Adapter,
   ): ExtendedSentence {
     const sentence = new Sentence(sentenceContext, adapter);
@@ -264,10 +278,6 @@ export default class Sentence {
     return proxify(this);
   };
 
-  private findParty(name: string): Party {
-    return this.sentenceContext.parties[name];
-  }
-
   /**
    * Set the current target to the current party.
    */
@@ -290,15 +300,6 @@ export default class Sentence {
    */
   get and(): ExtendedSentence {
     this.performQueuedAction();
-    return proxify(this);
-  }
-
-  /**
-   * Action to visit a given URL.
-   * @param url
-   */
-  visit(url: string): ExtendedSentence {
-    this.adapter.visit(url);
     return proxify(this);
   }
 
@@ -340,6 +341,15 @@ export default class Sentence {
   // Actions
 
   /**
+   * Action to visit a given URL.
+   * @param url
+   */
+  visit(url: string): ExtendedSentence {
+    this.adapter.visit(url);
+    return proxify(this);
+  }
+
+  /**
    * Queues an action to type into the current object.
    * Next fragments should be the target object (with `it` or a page object selector)
    * and the text to type (with `text`).
@@ -367,7 +377,31 @@ export default class Sentence {
     return proxify(this);
   }
 
+  /** Defines an argument for actions by looking into the current party's attributes */
+  my(key: string): ExtendedSentence {
+    if (!this.currentParty) {
+      throw new Error(`No party selected`);
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(this.currentParty, key)) {
+      throw new Error(`Party does not have attribute "${key}"`);
+    }
+
+    this.selectorArgs.set(this.currentObjectPath.join(), [
+      this.currentParty[key],
+    ]);
+    return proxify(this);
+  }
+
   // Internal
+
+  private findParty(name: string): Party {
+    if (!this.sentenceContext.parties[name]) {
+      throw new Error(`Party "${name}" does not exist`);
+    }
+
+    return this.sentenceContext.parties[name];
+  }
 
   private flattenSelectors(): string[] {
     const selectors: string[] = [];

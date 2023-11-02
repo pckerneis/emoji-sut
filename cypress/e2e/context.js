@@ -1,8 +1,13 @@
 /**
- * @type SentenceContext
+ * @type SentenceContextDef
  */
 const context = {
-  parties: [],
+  parties: {
+    admin: {
+      username: 'admin',
+      password: 'password',
+    },
+  },
   pageObjects: {
     header: {
       selector: '.component-header',

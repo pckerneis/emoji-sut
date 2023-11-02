@@ -11,8 +11,8 @@ describe('Login/Logout', () => {
         .when.I.visit('http://localhost:3000')
         .and.I.clickOn().header.loginButton
         .then.loginScreen.isVisible()
-        .when.I.typeInto.loginInput.text('admin')
-        .and.I.typeInto.passwordInput.text('password')
+        .when.I.typeInto.loginInput.my('username')
+        .and.I.typeInto.passwordInput.my('password')
         .and.I.clickOn().confirmButton
         .then.loginScreen.doesNotExist()
         .and.header.welcomeMessage.hasText('Welcome, admin!');
