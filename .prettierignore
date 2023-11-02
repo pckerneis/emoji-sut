@@ -8,3 +8,5 @@ docs
 **/README.md
 **.json
 yarn.lock
+**/*.cy.js
+**/mylib.js

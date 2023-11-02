@@ -8,7 +8,7 @@ export default function LoggedScreen(props) {
         <div onClick={props.showFavoritesScreen} className="link">
           Show my favorites
         </div>
-        <div onClick={props.doLogout} className="link">
+        <div onClick={props.doLogout} className="link logout-button">
           Log out
         </div>
       </div>

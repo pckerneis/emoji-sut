@@ -86,7 +86,7 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
         // Resolve from current object's siblings
         const hierarchy = [...sentence.currentObjectPath];
         hierarchy.pop();
-        const parent = sentence.resolveNode(hierarchy);
+        const parent = resolveNode(hierarchy, sentence.sentenceContext);
 
         if (parent && hasChildren(parent)) {
           if (Object.prototype.hasOwnProperty.call(parent.children, name)) {
@@ -114,6 +114,23 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
       return target[name];
     },
   });
+}
+
+function resolveNode(
+  path: string[],
+  sentenceContext: SentenceContext,
+): PageObjectNode {
+  let node = null;
+
+  for (const name of path) {
+    if (node == null) {
+      node = sentenceContext.pageObjects[name];
+    } else {
+      node = node.children[name];
+    }
+  }
+
+  return node;
 }
 
 function transformToPageObjectNodeTree(
@@ -147,11 +164,32 @@ function transformToPageObjectNodeTree(
   }
 }
 
+enum ActionKind {
+  click,
+  type,
+}
+
+interface BaseAction {
+  readonly kind: ActionKind;
+}
+
+interface ClickAction extends BaseAction {
+  readonly kind: ActionKind.click;
+}
+
+interface TypeAction extends BaseAction {
+  readonly kind: ActionKind.type;
+}
+
+type Action = TypeAction | ClickAction;
+
 export default class Sentence {
   currentParty: Party;
   currentObjectPath: string[] = [];
   selectorArgs: Map<string, any[]> = new Map();
+  queuedAction: Action = null;
 
+  /** Returns the currently selected PageObjectNode */
   get currentObject(): PageObjectNode {
     let currentObject = null;
 
@@ -178,6 +216,12 @@ export default class Sentence {
       return acc;
     }, {});
   }
+
+  /**
+   * Creates a new sentence with a given context and adapter
+   * @param sentenceContext - The context of the sentence, defining the available Page Objects and the Parties
+   * @param adapter - The adapter to use for interacting with the application
+   */
   public static given(
     sentenceContext: SentenceContext,
     adapter: Adapter,
@@ -186,14 +230,27 @@ export default class Sentence {
     return proxify(sentence);
   }
 
+  /**
+   * Syntax element usually used to mark a precondition or a user action.
+   * If there's a queued action, it will be performed before the next action.
+   */
   get when(): ExtendedSentence {
+    this.performQueuedAction();
     return proxify(this);
   }
-
+  /**
+   * Syntax element usually used to mark an assertion.
+   * If there's a queued action, it will be performed before the next action.
+   */
   get then(): ExtendedSentence {
+    this.performQueuedAction();
     return proxify(this);
   }
 
+  /**
+   * Switches the current party to the given one.
+   * @param party - The party to switch to. Can be either a string (party name) or a Party object.
+   */
   as: (party: Party | string) => ExtendedSentence = (party: Party | string) => {
     if (typeof party === 'string') {
       this.currentParty = this.findParty(party);
@@ -203,6 +260,7 @@ export default class Sentence {
 
     // TODO
     // this.currentTarget = this.currentParty;
+    this.performQueuedAction();
     return proxify(this);
   };
 
@@ -210,71 +268,106 @@ export default class Sentence {
     return this.sentenceContext.parties[name];
   }
 
+  /**
+   * Set the current target to the current party.
+   */
   get I(): ExtendedSentence {
     // TODO
     // this.currentTarget = this.currentParty;
     return proxify(this);
   }
 
+  /** Set the current target to the current object. */
   get it(): ExtendedSentence {
     // TODO
     // this.currentTarget = this.currentObject;
     return proxify(this);
   }
 
+  /**
+   * Syntax element to chain multiple actions or assertions.
+   * If there's a queued action, it will be performed before the next action.
+   */
   get and(): ExtendedSentence {
+    this.performQueuedAction();
     return proxify(this);
   }
 
+  /**
+   * Action to visit a given URL.
+   * @param url
+   */
   visit(url: string): ExtendedSentence {
     this.adapter.visit(url);
     return proxify(this);
   }
 
-  get isVisible(): ExtendedSentence {
+  /**
+   * Assertion to check if the current object is visible.
+   */
+  isVisible(): ExtendedSentence {
     return this.should('be.visible');
   }
 
-  get isNotVisible(): ExtendedSentence {
+  /**
+   * Assertion to check if the current object is not visible.
+   */
+  isNotVisible(): ExtendedSentence {
     return this.should('not.be.visible');
   }
 
-  get doesNotExist(): ExtendedSentence {
+  /**
+   * Assertion to check if the current object does not exist.
+   */
+  doesNotExist(): ExtendedSentence {
     return this.should('not.exist');
   }
 
+  // TODO this should be a Cypress specific assertion
   should(...args): ExtendedSentence {
     this.adapter.select(this.flattenSelectors()).should(...args);
     return proxify(this);
   }
 
+  /**
+   * Assertion to check if the current object has a given text.
+   * @param expectedText - The expected text
+   */
   hasText(expectedText: string): ExtendedSentence {
     return this.should('have.text', expectedText);
   }
 
-  typeText(text: string): ExtendedSentence {
-    this.adapter.select(this.flattenSelectors()).type(text);
+  // Actions
+
+  /**
+   * Queues an action to type into the current object.
+   * Next fragments should be the target object (with `it` or a page object selector)
+   * and the text to type (with `text`).
+   */
+  get typeInto(): ExtendedSentence {
+    this.queuedAction = {
+      kind: ActionKind.type,
+    };
     return proxify(this);
   }
 
-  click(): ExtendedSentence {
-    this.adapter.select(this.flattenSelectors()).click();
+  /**
+   * Action to click on the current object.
+   */
+  clickOn(): ExtendedSentence {
+    this.queuedAction = { kind: ActionKind.click };
     return proxify(this);
   }
 
-  resolveNode(path: string[]): PageObjectNode {
-    let node = null;
+  // Action args
 
-    for (const name of path) {
-      if (node == null) {
-        node = this.sentenceContext.pageObjects[name];
-      } else {
-        node = node.children[name];
-      }
-    }
-
-    return node;
+  /** Defines a text argument for actions such as `typeInto` */
+  text(text: string): ExtendedSentence {
+    this.selectorArgs.set(this.currentObjectPath.join(), [text]);
+    return proxify(this);
   }
+
+  // Internal
 
   private flattenSelectors(): string[] {
     const selectors: string[] = [];
@@ -303,5 +396,32 @@ export default class Sentence {
     } else {
       return selector;
     }
+  }
+
+  private performQueuedAction(): void {
+    if (this.queuedAction == null) {
+      return;
+    }
+
+    switch (this.queuedAction.kind) {
+      case ActionKind.click:
+        this.click();
+        break;
+      case ActionKind.type:
+        const text = this.selectorArgs.get(this.currentObjectPath.join())[0];
+        this.typeText(text);
+        break;
+    }
+    this.queuedAction = null;
+  }
+
+  private click(): ExtendedSentence {
+    this.adapter.select(this.flattenSelectors()).click();
+    return proxify(this);
+  }
+
+  private typeText(text: string): ExtendedSentence {
+    this.adapter.select(this.flattenSelectors()).type(text);
+    return proxify(this);
   }
 }

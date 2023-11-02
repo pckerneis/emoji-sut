@@ -7,8 +7,8 @@ const context = {
     header: {
       selector: '.component-header',
       children: {
-        loginButton: '.login',
-        welcomeMessage: '.login',
+        loginButton: '.login-button',
+        welcomeMessage: '.welcome',
       },
     },
     searchInput: 'input[type="search"]',
@@ -32,6 +32,12 @@ const context = {
         loginInput: 'input[type="text"]',
         passwordInput: 'input[type="password"]',
         confirmButton: 'button',
+      },
+    },
+    loggedScreen: {
+      selector: '.logged-screen',
+      children: {
+        logOutButton: '.logout-button',
       },
     },
   },
