@@ -39,12 +39,12 @@ interface Party {
 
 interface SentenceContext {
   pageObjects: { [name: string]: PageObjectNode };
-  parties: Party[];
+  parties: { [name: string]: Party };
 }
 
 interface SentenceContextDef {
   pageObjects: { [name: string]: PageObjectNodeDef };
-  parties: Party[];
+  parties: { [name: string]: Party };
 }
 
 interface PageObjectAccessors {
