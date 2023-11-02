@@ -1,3 +1,14 @@
+// TODO
+//  - Split code into multiple files
+//  - Add tests
+//  - Better error reporting (e.g. state machine for expected fragments)
+//  - Report dangling queued actions (add a "finisher" to be called in afterEach hooks)
+//  - Add more actions
+//  - Add more assertions
+//  - Add more adapters
+//  - Documentation
+//  - Examples
+
 interface Adapter {
   visit: (url: string) => void;
   select: (path: string[]) => TestElement;
