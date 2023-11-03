@@ -64,7 +64,7 @@ function validateContextDefinition(sentenceContext: any): void {
   }
 
   Object.keys(sentenceContext.pageObjects).forEach((name) => {
-    validateNodeDefinition(name, sentenceContext.pageObjects[name]);
+    validateNodeDefinition(name, [name], sentenceContext.pageObjects[name]);
   });
 
   if (sentenceContext.parties == null) {
@@ -72,12 +72,16 @@ function validateContextDefinition(sentenceContext: any): void {
   }
 }
 
-// TODO: report path in error messages
+function toPrettyPath(path: string[]): string {
+  return path.join(' ');
+}
+
 function validateNodeDefinition(
   name: string,
+  path: string[],
   nodeDef: PageObjectNodeDef,
 ): void {
-  validateNodeName(name);
+  validateNodeName(name, path);
 
   if (typeof nodeDef === 'string') {
     return;
@@ -88,39 +92,59 @@ function validateNodeDefinition(
   }
 
   if (nodeDef.selector == null) {
-    throw new Error('Missing selector');
+    throw new Error(
+      `Missing selector for node at path "${toPrettyPath(path)}"`,
+    );
   }
 
   if (nodeDef.children != null) {
     Object.keys(nodeDef.children).forEach((name) => {
-      validateNodeDefinition(name, nodeDef.children[name]);
+      validateNodeDefinition(name, [...path, name], nodeDef.children[name]);
     });
   }
 }
 
-function validateNodeName(name: string): void {
+function validateNodeName(name: string, path: string[]): void {
   if (name.includes(' ')) {
-    throw new Error(`Node name "${name}" contains spaces`);
+    throw new Error(
+      `Node name "${name}" contains spaces at path "${toPrettyPath(path)}"`,
+    );
   }
 
   // We technically could allow any valid JS identifier, but the check
   // is quite complex
   if (!name.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/)) {
-    throw new Error(`Node name "${name}" contains invalid characters`);
+    throw new Error(
+      `Node name "${name}" contains invalid characters at path "${toPrettyPath(
+        path,
+      )}"`,
+    );
   }
 
   // We could also check for JS reserved words here, but the error would be
   // quickly detected by the user anyway
 
   if (isReservedWord(name)) {
-    throw new Error(`Node name "${name}" is a reserved word`);
+    throw new Error(
+      `Node name "${name}" is a reserved word at path "${toPrettyPath(path)}"`,
+    );
   }
 }
 
 function isReservedWord(name: string): boolean {
   // Dirty and inefficient check, but it's good enough for now and doesn't
   // risk to be out of sync
-  return name in new Sentence({ parties: {}, pageObjects: {} }, null);
+  const isSentenceMethod = Object.getOwnPropertyNames(
+    Sentence.prototype,
+  ).includes(name);
+
+  if (isSentenceMethod) {
+    return true;
+  }
+
+  return ['selector', 'children'].includes(name);
+
+
 }
 
 interface PageObjectAccessors {
@@ -196,10 +220,9 @@ function proxify(sentence: ExtendedSentence | Sentence): any {
         return target[name];
       }
 
+      const prettyPath = toPrettyPath(sentence.currentObjectPath);
       throw new Error(
-        `Could not resolve "${name}". Current object path is "${sentence.currentObjectPath.join(
-          ' > ',
-        )}".`,
+        `Could not resolve "${name}". Current object path is "${prettyPath}".`,
       );
     },
   });
