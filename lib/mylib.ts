@@ -1,5 +1,4 @@
 // TODO
-//  - Split code into multiple files
 //  - Add tests
 //  - Better error reporting (e.g. state machine for expected fragments)
 //  - Report dangling queued actions (add a "finisher" to be called in afterEach hooks)
@@ -9,298 +8,30 @@
 //  - Documentation
 //  - Examples
 
-interface Adapter {
-  visit: (url: string) => void;
-  select: (path: string[]) => TestElement;
-}
-
-interface TestElement {
-  should: (...args) => void;
-  type: (text: string) => void;
-  click(): void;
-}
-
-type Selector = string | ((...args) => string);
-
-interface Selectable {
-  selector: Selector;
-}
-
-interface Parent<T> {
-  children: { [name: string]: T };
-}
-
-function hasChildren(object: any): object is Parent<any> {
-  return object.children != null && typeof object.children === 'object';
-}
-
-type PageObjectNodeDef =
-  | (Selectable & Partial<Parent<PageObjectNodeDef>>)
-  | Selector;
-
-interface WithPath {
-  path: string[];
-}
-
-type PageObjectNode = Selectable & Partial<Parent<PageObjectNode>> & WithPath;
-
-interface Party {
-  [name: string]: any;
-}
-
-interface SentenceContext {
-  pageObjects: { [name: string]: PageObjectNode };
-  parties: { [name: string]: Party };
-}
-
-interface SentenceContextDef {
-  pageObjects: { [name: string]: PageObjectNodeDef };
-  parties: { [name: string]: Party };
-}
-
-function validateContextDefinition(sentenceContext: any): void {
-  if (sentenceContext.pageObjects == null) {
-    throw new Error('Missing pageObjects');
-  }
-
-  Object.keys(sentenceContext.pageObjects).forEach((name) => {
-    validateNodeDefinition(name, [name], sentenceContext.pageObjects[name]);
-  });
-
-  if (sentenceContext.parties == null) {
-    throw new Error('Missing parties');
-  }
-}
-
-function toPrettyPath(path: string[]): string {
-  return path.join(' ');
-}
-
-function validateNodeDefinition(
-  name: string,
-  path: string[],
-  nodeDef: PageObjectNodeDef,
-): void {
-  validateNodeName(name, path);
-
-  if (typeof nodeDef === 'string') {
-    return;
-  }
-
-  if (typeof nodeDef === 'function') {
-    return;
-  }
-
-  if (nodeDef.selector == null) {
-    throw new Error(
-      `Missing selector for node at path "${toPrettyPath(path)}"`,
-    );
-  }
-
-  if (nodeDef.children != null) {
-    Object.keys(nodeDef.children).forEach((name) => {
-      validateNodeDefinition(name, [...path, name], nodeDef.children[name]);
-    });
-  }
-}
-
-function validateNodeName(name: string, path: string[]): void {
-  if (name.includes(' ')) {
-    throw new Error(
-      `Node name "${name}" contains spaces at path "${toPrettyPath(path)}"`,
-    );
-  }
-
-  // We technically could allow any valid JS identifier, but the check
-  // is quite complex
-  if (!name.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/)) {
-    throw new Error(
-      `Node name "${name}" contains invalid characters at path "${toPrettyPath(
-        path,
-      )}"`,
-    );
-  }
-
-  // We could also check for JS reserved words here, but the error would be
-  // quickly detected by the user anyway
-
-  if (isReservedWord(name)) {
-    throw new Error(
-      `Node name "${name}" is a reserved word at path "${toPrettyPath(path)}"`,
-    );
-  }
-}
-
-function isReservedWord(name: string): boolean {
-  // Dirty and inefficient check, but it's good enough for now and doesn't
-  // risk to be out of sync
-  const isSentenceMethod = Object.getOwnPropertyNames(
-    Sentence.prototype,
-  ).includes(name);
-
-  if (isSentenceMethod) {
-    return true;
-  }
-
-  return ['selector', 'children'].includes(name);
-
-
-}
-
-interface PageObjectAccessors {
-  [name: string]: ExtendedSentence;
-}
-
-type ExtendedSentence = Sentence & PageObjectAccessors;
-
-function resolveSelector(
-  child: Selectable & Partial<Parent<PageObjectNode>>,
-  sentence: Sentence | ExtendedSentence,
-  path: string[],
-): Sentence | ExtendedSentence | Function {
-  if (typeof child.selector === 'function') {
-    return (...args) => {
-      sentence.selectorArgs.set(path.join(), args);
-      return proxify(sentence);
-    };
-  } else {
-    return proxify(sentence);
-  }
-}
-
-// Returning `any` here because TS doesn't want me to be more specific
-function proxify(sentence: ExtendedSentence | Sentence): any {
-  return new Proxy(sentence, {
-    get: (target, name: string) => {
-      if (sentence.currentObject != null) {
-        // Resolve from current object's children
-        if (hasChildren(sentence.currentObject)) {
-          if (
-            Object.prototype.hasOwnProperty.call(
-              sentence.currentObject.children,
-              name,
-            )
-          ) {
-            const child = sentence.currentObject.children[name];
-            const path = [...sentence.currentObjectPath, name];
-            sentence.currentObjectPath = path;
-            return resolveSelector(child, sentence, path);
-          }
-        }
-
-        // Resolve from current object's siblings
-        const hierarchy = [...sentence.currentObjectPath];
-        hierarchy.pop();
-        const parent = resolveNode(hierarchy, sentence.sentenceContext);
-
-        if (parent && hasChildren(parent)) {
-          if (Object.prototype.hasOwnProperty.call(parent.children, name)) {
-            const path = [...hierarchy, name];
-            sentence.currentObjectPath = path;
-            const sibling = parent.children[name];
-            return resolveSelector(sibling, sentence, path);
-          }
-        }
-      }
-
-      // Resolve from root
-      if (
-        Object.prototype.hasOwnProperty.call(
-          sentence.sentenceContext.pageObjects,
-          name,
-        )
-      ) {
-        const rootObject = sentence.sentenceContext.pageObjects[name];
-        const path = [name];
-        sentence.currentObjectPath = path;
-        return resolveSelector(rootObject, sentence, path);
-      }
-
-      if (name in target) {
-        return target[name];
-      }
-
-      const prettyPath = toPrettyPath(sentence.currentObjectPath);
-      throw new Error(
-        `Could not resolve "${name}". Current object path is "${prettyPath}".`,
-      );
-    },
-  });
-}
-
-function resolveNode(
-  path: string[],
-  sentenceContext: SentenceContext,
-): PageObjectNode {
-  let node = null;
-
-  for (const name of path) {
-    if (node == null) {
-      node = sentenceContext.pageObjects[name];
-    } else {
-      node = node.children[name];
-    }
-  }
-
-  return node;
-}
-
-function transformToPageObjectNodeTree(
-  treeDef: PageObjectNodeDef,
-  path: string[],
-): PageObjectNode {
-  if (typeof treeDef === 'string') {
-    return {
-      selector: treeDef,
-      path,
-    };
-  } else if (typeof treeDef === 'function') {
-    return {
-      selector: treeDef,
-      path,
-    };
-  } else {
-    return {
-      ...treeDef,
-      path,
-      children: treeDef.children
-        ? Object.keys(treeDef.children).reduce((acc, name) => {
-            acc[name] = transformToPageObjectNodeTree(treeDef.children[name], [
-              ...path,
-              name,
-            ]);
-            return acc;
-          }, {})
-        : {},
-    };
-  }
-}
-
-enum ActionKind {
-  click,
-  type,
-}
-
-interface BaseAction {
-  readonly kind: ActionKind;
-}
-
-interface ClickAction extends BaseAction {
-  readonly kind: ActionKind.click;
-}
-
-interface TypeAction extends BaseAction {
-  readonly kind: ActionKind.type;
-}
-
-type Action = TypeAction | ClickAction;
+import { SentenceContext, SentenceContextDef } from './context';
+import {
+  Action,
+  ActionKind,
+  buildClickAction,
+  buildTypeAction,
+} from './actions';
+import {
+  PageObjectNode,
+  PageObjectNodeDef,
+  Selector,
+  transformToPageObjectNodeTree,
+} from './page-objects';
+import { ExtendedSentence, proxify } from './proxy';
+import { Party } from './party';
+import { Adapter } from './adapter';
+import { toPrettyPath } from './path';
 
 export default class Sentence {
   readonly sentenceContext: SentenceContext;
   currentParty: Party;
   currentObjectPath: string[] = [];
   selectorArgs: Map<string, any[]> = new Map();
-  queuedAction: Action = null;
+  queuedAction?: Action | null;
 
   /** Returns the currently selected PageObjectNode */
   get currentObject(): PageObjectNode {
@@ -376,8 +107,6 @@ export default class Sentence {
       this.currentParty = party;
     }
 
-    // TODO
-    // this.currentTarget = this.currentParty;
     this.performQueuedAction();
     return proxify(this);
   };
@@ -386,15 +115,13 @@ export default class Sentence {
    * Set the current target to the current party.
    */
   get I(): ExtendedSentence {
-    // TODO
-    // this.currentTarget = this.currentParty;
+    // Noop
     return proxify(this);
   }
 
   /** Set the current target to the current object. */
   get it(): ExtendedSentence {
-    // TODO
-    // this.currentTarget = this.currentObject;
+    // Noop
     return proxify(this);
   }
 
@@ -407,38 +134,39 @@ export default class Sentence {
     return proxify(this);
   }
 
-  /**
-   * Assertion to check if the current object is visible.
-   */
-  isVisible(): ExtendedSentence {
-    return this.should('be.visible');
-  }
+  // Assertions
 
-  /**
-   * Assertion to check if the current object is not visible.
-   */
-  isNotVisible(): ExtendedSentence {
-    return this.should('not.be.visible');
-  }
-
-  /**
-   * Assertion to check if the current object does not exist.
-   */
-  doesNotExist(): ExtendedSentence {
-    return this.should('not.exist');
-  }
-
-  // TODO this should be a Cypress specific assertion
   should(...args): ExtendedSentence {
     this.adapter.select(this.flattenSelectors()).should(...args);
     return proxify(this);
   }
 
   /**
+   * Assertion to check if the current object is visible.
+   */
+  shouldBeVisible(): ExtendedSentence {
+    return this.should('be.visible');
+  }
+
+  /**
+   * Assertion to check if the current object is not visible.
+   */
+  shouldNotBeVisible(): ExtendedSentence {
+    return this.should('not.be.visible');
+  }
+
+  /**
+   * Assertion to check if the current object does not exist.
+   */
+  shouldNotExist(): ExtendedSentence {
+    return this.should('not.exist');
+  }
+
+  /**
    * Assertion to check if the current object has a given text.
    * @param expectedText - The expected text
    */
-  hasText(expectedText: string): ExtendedSentence {
+  shouldHaveText(expectedText: string): ExtendedSentence {
     return this.should('have.text', expectedText);
   }
 
@@ -459,9 +187,7 @@ export default class Sentence {
    * and the text to type (with `text`).
    */
   get typeInto(): ExtendedSentence {
-    this.queuedAction = {
-      kind: ActionKind.type,
-    };
+    this.queuedAction = buildTypeAction();
     return proxify(this);
   }
 
@@ -469,7 +195,7 @@ export default class Sentence {
    * Action to click on the current object.
    */
   clickOn(): ExtendedSentence {
-    this.queuedAction = { kind: ActionKind.click };
+    this.queuedAction = buildClickAction();
     return proxify(this);
   }
 
@@ -537,19 +263,30 @@ export default class Sentence {
   }
 
   private performQueuedAction(): void {
-    if (this.queuedAction == null) {
+    const queuedAction = this.queuedAction;
+    const kind = queuedAction?.kind;
+
+    if (kind == undefined) {
       return;
     }
 
-    switch (this.queuedAction.kind) {
+    switch (kind) {
       case ActionKind.click:
         this.click();
         break;
       case ActionKind.type:
-        const text = this.selectorArgs.get(this.currentObjectPath.join())[0];
-        this.typeText(text);
+        const text = this.selectorArgs.get(this.currentObjectPath.join());
+
+        if (!text || text.length === 0) {
+          throw new Error(`No text provided for type action`);
+        }
+
+        this.typeText(text[0]);
         break;
+      default:
+        throw new Error(`Unknown action kind "${kind}"`);
     }
+
     this.queuedAction = null;
   }
 
@@ -562,4 +299,89 @@ export default class Sentence {
     this.adapter.select(this.flattenSelectors()).type(text);
     return proxify(this);
   }
+}
+
+export function validateContextDefinition(sentenceContext: any): void {
+  if (sentenceContext.pageObjects == null) {
+    throw new Error('Missing pageObjects');
+  }
+
+  Object.keys(sentenceContext.pageObjects).forEach((name) => {
+    validateNodeDefinition(name, [name], sentenceContext.pageObjects[name]);
+  });
+
+  if (sentenceContext.parties == null) {
+    throw new Error('Missing parties');
+  }
+}
+
+function validateNodeDefinition(
+  name: string,
+  path: string[],
+  nodeDef: PageObjectNodeDef,
+): void {
+  validateNodeName(name, path);
+
+  if (typeof nodeDef === 'string') {
+    return;
+  }
+
+  if (typeof nodeDef === 'function') {
+    return;
+  }
+
+  if (nodeDef.selector == null) {
+    throw new Error(
+      `Missing selector for node at path "${toPrettyPath(path)}"`,
+    );
+  }
+
+  const children = nodeDef.children;
+
+  if (children != null) {
+    Object.keys(children).forEach((name) => {
+      validateNodeDefinition(name, [...path, name], children[name]);
+    });
+  }
+}
+
+function validateNodeName(name: string, path: string[]): void {
+  if (name.includes(' ')) {
+    throw new Error(
+      `Node name "${name}" contains spaces at path "${toPrettyPath(path)}"`,
+    );
+  }
+
+  // We technically could allow any valid JS identifier, but the check
+  // is quite complex
+  if (!name.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/)) {
+    throw new Error(
+      `Node name "${name}" contains invalid characters at path "${toPrettyPath(
+        path,
+      )}"`,
+    );
+  }
+
+  // We could also check for JS reserved words here, but the error would be
+  // quickly detected by the user anyway
+
+  if (isReservedWord(name)) {
+    throw new Error(
+      `Node name "${name}" is a reserved word at path "${toPrettyPath(path)}"`,
+    );
+  }
+}
+
+function isReservedWord(name: string): boolean {
+  // Dirty and inefficient check, but it's good enough for now and doesn't
+  // risk to be out of sync
+  const isSentenceMethod = Object.getOwnPropertyNames(
+    Sentence.prototype,
+  ).includes(name);
+
+  if (isSentenceMethod) {
+    return true;
+  }
+
+  return ['selector', 'children'].includes(name);
 }
